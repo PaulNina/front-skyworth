@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL, API_ENDPOINTS, getAuthHeaders } from '../config/api';
@@ -41,8 +41,6 @@ interface PublicLandingProps {
 export default function PublicLanding({ onNavigateToDashboard }: PublicLandingProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [criticalError, setCriticalError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{cupones: string[], mensaje: string} | null>(null);
   const [showTerms, setShowTerms] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
@@ -94,17 +92,28 @@ export default function PublicLanding({ onNavigateToDashboard }: PublicLandingPr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
 
     try {
       // Validación: Verificar que hay un vendedor autenticado
       if (!user || !user.email) {
-        throw new Error("âš ï¸ Debes iniciar sesión como vendedor para registrar ventas. Por favor, recarga la página e inicia sesión.");
+        throw new Error("⚠️ Debes iniciar sesión como vendedor para registrar ventas. Por favor, recarga la página e inicia sesión.");
       }
 
-      if (!files.ciFront || !files.ciBack || !files.invoice) 
-        throw new Error("Ãrbitro: Falta documentación obligatoria (CI y Factura).");
+      if (user.rol === "ADMIN") {
+        throw new Error(
+          "Los administradores no pueden registrar ventas. Solo los vendedores están autorizados para registrar clientes."
+        );
+      }
+
+      if (user.rol !== "VENDEDOR") {
+        throw new Error(
+          "Solo los vendedores pueden registrar ventas. Tu rol actual no tiene permiso para esta acción."
+        );
+      }
+    
+     if (!files.ciFront || !files.ciBack || !files.invoice) 
+        throw new Error("Árbitro: Falta documentación obligatoria (CI y Factura).");
       if (!formData.terms) 
         throw new Error("Debes aceptar el reglamento del torneo.");
 
@@ -133,15 +142,15 @@ export default function PublicLanding({ onNavigateToDashboard }: PublicLandingPr
 
       const data = await response.json();
       
-      console.log('ðŸ“Š Response data:', { ok: response.ok, status: response.status, data });
+      console.log('📊 Response data:', { ok: response.ok, status: response.status, data });
       
       if (!response.ok || data.error) {
         const errorMsg = data.mensaje || data.message || 'Error en el registro';
-        console.error('âŒ Registration failed:', errorMsg);
+        console.error('❌ Registration failed:', errorMsg);
         throw new Error(errorMsg);
       }
 
-      console.log('✅ Registration successful:', data.data);
+      console.log('? Registration successful:', data.data);
       
       const cupones = data.data?.codigos_cupones || [];
       const whatsappEnviado = data.data?.whatsappEnviado;
@@ -204,27 +213,42 @@ export default function PublicLanding({ onNavigateToDashboard }: PublicLandingPr
             ciBack: null,
             invoice: null
         });
-        setError(null);
         
-        // Recargar página para asegurar estado limpio (opcional, pero pedido en botón anterior)
+        // Recargar página para asegurar estado limpio (opcional, pero pedido en bot�n anterior)
         window.location.reload();
       });
     } catch (err: any) {
       console.error('🚨 Exception during registration:', err);
       const errorMessage = err.message || "Error en el registro. Intenta de nuevo.";
       
-      // Si el error es crítico, mostrarlo en pantalla completa
-      if (err.message && err.message.length > 50) {
-        setCriticalError(errorMessage);
-      } else {
-        setError(errorMessage);
-      }
+      // Mostrar error con SweetAlert
+      Swal.fire({
+        title: '<span class="font-sport text-red-600">¡TARJETA ROJA!</span>',
+        html: `<div class="text-left">
+          <p class="text-gray-700 font-semibold mb-2">El árbitro ha detenido el juego:</p>
+          <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+            <p class="text-red-800 font-bold">${errorMessage}</p>
+          </div>
+        </div>`,
+        icon: 'error',
+        confirmButtonText: 'VOLVER A INTENTAR',
+        confirmButtonColor: '#DC2626',
+        background: '#fff',
+        customClass: {
+          title: 'font-sport',
+          confirmButton: 'font-sport rounded-xl px-6 py-3 text-lg',
+          popup: 'rounded-3xl border-4 border-red-500'
+        },
+        padding: '2em',
+        width: '32em',
+        backdrop: `rgba(220, 38, 38, 0.4)`
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  // Si TODO está correcto, mostrar pantalla con confetti
+  // Si TODO est� correcto, mostrar pantalla con confetti
   if (successData) {
     return (
       <div className="min-h-screen bg-stadium-gradient flex flex-col items-center justify-center p-4">
@@ -296,7 +320,7 @@ export default function PublicLanding({ onNavigateToDashboard }: PublicLandingPr
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 max-w-4xl mx-auto mb-6 md:mb-10">
              <div className="bg-gradient-to-br from-yellow-400 to-skyworth-accent p-6 md:p-8 rounded-3xl md:rounded-3xl border-2 border-yellow-300 shadow-2xl transform transition hover:scale-105 group">
-                <span className="text-4xl md:text-5xl block mb-2 md:mb-4 transition-transform group-hover:rotate-12">🎟️</span>
+                <span className="text-4xl md:text-5xl block mb-2 md:mb-4 transition-transform group-hover:rotate-12">🏟️</span>
                 <h3 className="font-sport text-2xl md:text-3xl text-skyworth-dark leading-none">5 ENTRADAS</h3>
                 <p className="text-[10px] md:text-xs font-black opacity-60 uppercase tracking-wider md:tracking-[0.2em] mt-2 md:mt-3">Para nuestros clientes estrella</p>
              </div>
@@ -328,23 +352,7 @@ export default function PublicLanding({ onNavigateToDashboard }: PublicLandingPr
               <p className="text-gray-400 font-black text-[9px] md:text-xs tracking-wider md:tracking-[0.3em] mt-3 md:mt-5 uppercase">NUEVO FICHAJE: REGISTRA TU TV Y GANA</p>
             </div>
 
-            {error && (
-              <div className="bg-red-50 border-l-4 md:border-l-6 border-red-500 p-4 md:p-6 text-red-900 font-bold rounded-2xl md:rounded-2xl mb-4 md:mb-8 animate-shake text-sm md:text-base flex items-center gap-3 md:gap-4 shadow-xl">
-                <span className="text-2xl md:text-3xl">🚫</span> 
-                <div className="flex-1">
-                  <p className="font-black uppercase tracking-wider md:tracking-wider text-[9px] md:text-[10px] opacity-50 mb-1">Error del Árbitro</p>
-                  <p>{error}</p>
-                  {error.includes("iniciar sesión") && (
-                    <button 
-                      onClick={() => window.location.reload()} 
-                      className="mt-2 text-xs md:text-sm text-red-700 underline hover:text-red-900 font-black"
-                    >
-                     🔄 Recargar Página
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
+
 
             <form onSubmit={handleSubmit} className="space-y-4 md:space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
@@ -425,7 +433,7 @@ export default function PublicLanding({ onNavigateToDashboard }: PublicLandingPr
                   {[
                     { id: 'ciFront', label: 'C.I. FRONTAL', icon: '🪪' },
                     { id: 'ciBack', label: 'C.I. REVERSO', icon: '🪪' },
-                    { id: 'invoice', label: 'FACTURA / TICKET', icon: '🧾' }
+                    { id: 'invoice', label: 'FACTURA / NOTA DE VENTA', icon: '🧾' }
                   ].map((doc) => (
                     <label key={doc.id} className={`border-2 md:border-3 border-dashed rounded-xl md:rounded-2xl p-4 md:p-6 text-center cursor-pointer transition-all hover:scale-105 active:scale-95 group ${(files as any)[doc.id] ? 'border-skyworth-grass bg-green-50' : 'border-gray-200 hover:border-skyworth-blue hover:bg-blue-50'}`}>
                       <span className="text-3xl md:text-4xl block mb-2 md:mb-3 group-hover:animate-bounce">{doc.icon}</span>
@@ -487,4 +495,5 @@ export default function PublicLanding({ onNavigateToDashboard }: PublicLandingPr
     </div>
   );
 }
+
 
