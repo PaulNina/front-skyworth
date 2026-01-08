@@ -1,95 +1,71 @@
-# Guia de Despliegue en VPS (Ubuntu/Linux)
+# Guía de Despliegue para contabol.com
 
-Esta guía detalla los pasos para desplegar el frontend de React (Vite) y el backend en un mismo VPS, usando Nginx como servidor web y proxy reverso con SSL (HTTPS).
+Dado que tu backend ya está funcionando en `https://contabol.com/api`, solo necesitamos subir el frontend y decirle al servidor que muestre los archivos visuales cuando entren a la página principal.
 
-## 1. Preparación del Frontend (Local)
+## 1. Construir el Frontend (En tu computadora)
 
-Antes de subir los archivos al VPS, debes preparar la aplicación para producción.
+Ya he creado el archivo `.env.production` configurado para `https://contabol.com`. Ahora solo genera los archivos finales:
 
-### Configurar URL del Backend
-Para producción, el frontend NO puede buscar el backend en `localhost`, debe apuntar a tu dominio.
-
-1. Crea un archivo `.env.production` en la raíz del proyecto:
-   ```env
-   VITE_API_URL=https://tu-dominio.com
-   ```
-   *(Reemplaza `tu-dominio.com` por tu dominio real)*.
-
-2. Genera los archivos estáticos:
+1. Abrir terminal en la carpeta del proyecto.
+2. Ejecutar:
    ```bash
    npm run build
    ```
-   Esto creará una carpeta `dist/` con todo tu sitio web listo para subir.
+   *Esto creará una carpeta llamada `dist` con todos los archivos optimizados.*
 
-## 2. Configuración del VPS
+## 2. Subir Archivos al VPS
 
-Asumimos que tienes acceso SSH a tu servidor Ubuntu.
+Necesitas copiar el contenido de la carpeta `dist` (de tu PC) al servidor.
 
-### Instalar Nginx y Certbot
-```bash
-sudo apt update
-sudo apt install nginx certbot python3-certbot-nginx
-```
+1.  **Ruta recomendada en el VPS**: `/var/www/html` (o `/var/www/contabol`).
+    *   *Nota: Si ya hay archivos ahí, es recomendable borrarlos o respaldarlos antes (excepto si hay carpetas del backend, ten cuidado).*
 
-### Subir Archivos
-Sube el contenido de la carpeta `dist/` generada en tu PC a la ruta `/var/www/skyworth` en el VPS (puedes usar FileZilla o SCP).
+2.  **Método de subida**:
+    *   Usa **FileZilla** o **WinSCP**.
+    *   Conéctate a tu VPS.
+    *   Navega a `/var/www/html`.
+    *   Arrastra todo el **contenido** de tu carpeta `dist` local (index.html, assets, entc.) hacia esa carpeta remota.
 
-## 3. Configuración de Nginx
+## 3. Configurar Nginx (En el VPS)
 
-Esta configuración servirá tu frontend y redirigirá las llamadas de `/api` a tu backend que corre en el puerto 7000.
+Como ya tienes el backend funcionando, ya existe una configuración de Nginx. Debemos modificarla para que sirva el frontend.
 
-1. Crear archivo de configuración:
-   ```bash
-   sudo nano /etc/nginx/sites-available/skyworth
-   ```
+1.  Entra al VPS por SSH.
+2.  Edita la configuración de tu sitio (el nombre puede variar, revisa en `/etc/nginx/sites-enabled/`):
+    ```bash
+    # Ejemplo, busca el archivo correcto
+    sudo nano /etc/nginx/sites-enabled/default
+    # O tal vez se llame contabol
+    ```
 
-2. Pegar la siguiente configuración:
+3.  **Busca el bloque `server` que tiene `server_name contabol.com;`**.
+    Asegúrate de que tenga esta sección `location /` configurada así:
 
-   ```nginx
-   server {
-       server_name tu-dominio.com www.tu-dominio.com;
+    ```nginx
+    server {
+        server_name contabol.com www.contabol.com;
+        
+        # ... configuración SSL existente ...
 
-       root /var/www/skyworth;
-       index index.html;
+        # 1. ESTO ES LO NUEVO: Configuración del Frontend
+        root /var/www/html; # <--- La carpeta donde subiste los archivos 'dist'
+        index index.html;
 
-       # Frontend (React Router)
-       location / {
-           try_files $uri $uri/ /index.html;
-       }
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
 
-       # Backend (Proxy Reverso)
-       location /api/ {
-           proxy_pass http://localhost:7000/api/;
-           proxy_http_version 1.1;
-           proxy_set_header Upgrade $http_upgrade;
-           proxy_set_header Connection 'upgrade';
-           proxy_set_header Host $host;
-           proxy_cache_bypass $http_upgrade;
-       }
-   }
-   ```
+        # 2. ESTO YA DEBERÍA ESTAR (Backend)
+        location /api/ {
+            proxy_pass http://localhost:7000/api/; # O puerto 8080/otro según tu configuración actual
+            # ... otras configuraciones de proxy existentes ...
+        }
+    }
+    ```
 
-3. Activar el sitio:
-   ```bash
-   sudo ln -s /etc/nginx/sites-available/skyworth /etc/nginx/sites-enabled/
-   sudo nginx -t
-   sudo systemctl restart nginx
-   ```
+4.  **Guardar y Reiniciar**:
+    *   Guarda con `Ctrl+O`, sal con `Ctrl+X`.
+    *   Verifica que no haya errores: `sudo nginx -t`
+    *   Reinicia Nginx: `sudo systemctl restart nginx`
 
-## 4. Configuración SSL (HTTPS)
-
-Certbot configurará automáticamente el SSL gratuito de Let's Encrypt.
-
-```bash
-sudo certbot --nginx -d tu-dominio.com -d www.tu-dominio.com
-```
-
-Sigue las instrucciones en pantalla.
-
-## 5. Backend
-
-Asegúrate de que tu backend (Java/Spring Boot) esté corriendo en el puerto 7000 en el VPS.
-```bash
-java -jar tu-backend.jar
-```
-*(Recomendamos usar Docker o un servicio systemd para mantener el backend corriendo siempre)*.
+¡Listo! Al entrar a `https://contabol.com` deberías ver tu aplicación web.
